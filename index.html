@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ur">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DAJJALI MATRIX - MUAAZ IQBAL</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#ff2d2d">
+<style>
+:root{--bg:#050810;--card:#0d1326;--accent:#ff2d2d;--text:#eaf0ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui; height:100vh;display:flex;flex-direction:column}
+header{padding:14px;text-align:center;background:linear-gradient(135deg,#1a0f0f,#0d1326);position:sticky;top:0;z-index:5}
+.cover3d{width:200px;height:280px;margin:20px auto;perspective:1000px}
+.book{width:100%;height:100%;position:relative;transform-style:preserve-3d;transform:rotateY(-25deg);transition:0.6s;box-shadow:0 20px 50px rgba(0,0,0,.7)}
+.book:hover{transform:rotateY(0deg)}
+.book img{width:100%;height:100%;object-fit:cover;border-radius:8px}
+main{flex:1;overflow:auto;padding-bottom:80px}
+.tabcontent{display:none;padding:16px}
+.tabcontent.active{display:block}
+#viewer canvas{width:100%;max-width:800px;background:white;border-radius:8px;display:block;margin:auto}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#0a1022;border-top:1px solid #1e2a4a}
+.bottom-nav button{flex:1;padding:12px 4px;background:none;border:none;color:#9fb0d0;font-size:12px}
+.bottom-nav button.active{color:var(--accent);font-weight:bold}
+.toolbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px}
+.toolbar button{padding:8px 12px;background:#1a2344;border:none;border-radius:8px;color:white}
+</style>
+</head>
+<body>
+<header><h2>DAJJALI MATRIX</h2><p style="opacity:.7;margin:4px 0 0">Author: MUAAZ IQBAL | Publisher: muslimislam.org</p></header>
+<main>
+<div id="home" class="tabcontent active">
+<div class="cover3d"><div class="book"><img src="/public/icon.jpg" alt="cover"></div></div>
+<p style="text-align:center;opacity:.8">The Hidden Global Agendas Exposed</p>
+<div style="text-align:center;margin-top:20px"><button onclick="switchTab('read')" style="padding:12px 24px;background:var(--accent);border:none;border-radius:12px;color:white;font-size:16px">Start Reading</button></div>
+</div>
+
+<div id="read" class="tabcontent">
+<div class="toolbar">
+<button id="prev">◀</button><span id="pinfo">1 / --</span><button id="next">▶</button>
+<button id="zoomOut">-</button><button id="zoomIn">+</button>
+<button id="downloadPage">Download Page</button>
+</div>
+<div id="viewer"><canvas id="c"></canvas></div>
+</div>
+
+<div id="library" class="tabcontent"><h3>Chapters</h3><ul id="chapters"></ul></div>
+
+<div id="translate" class="tabcontent"><h3>Translate & Download</h3>
+<p>Current page ko capture karke translate karke download kar sakte ho.</p>
+<select id="tlang"><option value="ur">Urdu</option><option value="en">English</option><option value="ar">Arabic</option><option value="hi">Hindi</option></select>
+<button id="doTranslate" style="padding:10px 16px;background:var(--accent);border:none;border-radius:8px;color:white;margin-top:10px">Translate Current Page & Download</button>
+</div>
+
+<div id="about" class="tabcontent"><h3>About Book</h3><p><b>DAJJALI MATRIX</b> by <b>MUAAZ IQBAL</b>, published by muslimislam.org. Ye kitab global agendas aur Dajjali system ko expose karti hai.</p><p>Website: muslimislam.vercel.app</p></div>
+</main>
+
+<nav class="bottom-nav">
+<button data-tab="home" class="active">🏠 Home</button>
+<button data-tab="library">📚 Library</button>
+<button data-tab="read">📖 Read</button>
+<button data-tab="translate">🌐 Translate</button>
+<button data-tab="about">ℹ️ About</button>
+</nav>
+
+<script type="module">
+import {firebaseConfig} from '/firebase-config.js';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import {getDatabase, ref, set, increment, update, onValue} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+const app=initializeApp(firebaseConfig);
+const db=getDatabase(app);
+const uid = Math.random().toString(36).slice(2);
+set(ref(db,'activeViewers/'+uid),{joined:Date.now(),page:1}); 
+window.addEventListener('beforeunload',()=>{set(ref(db,'activeViewers/'+uid),null)});
+
+// tabs
+function switchTab(id){
+ document.querySelectorAll('.tabcontent').forEach(t=>t.classList.remove('active'));
+ document.getElementById(id).classList.add('active');
+ document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.remove('active'));
+ document.querySelector(`.bottom-nav button[data-tab="${id}"]`).classList.add('active');
+ if(id==='read' && !window.pdfLoaded) loadPdf();
+}
+window.switchTab=switchTab;
+document.querySelectorAll('.bottom-nav button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+
+// pdf.js
+import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.2.67/build/pdf.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.2.67/build/pdf.worker.min.mjs';
+let pdfDoc=null, pageNum=1, scale=1.4;
+const canvas=document.getElementById('c'), ctx=canvas.getContext('2d');
+async function loadPdf(){
+ window.pdfLoaded=true;
+ pdfDoc=await pdfjsLib.getDocument('/public/books/dajjali_matrix.pdf').promise;
+ document.getElementById('pinfo').textContent=`1 / ${pdfDoc.numPages}`;
+ render();
+ update(ref(db,'stats/totalViews'),{views:increment(1)});
+}
+async function render(){
+ const page=await pdfDoc.getPage(pageNum);
+ const vp=page.getViewport({scale});
+ canvas.width=vp.width; canvas.height=vp.height;
+ await page.render({canvasContext:ctx,viewport:vp}).promise;
+ document.getElementById('pinfo').textContent=`${pageNum} / ${pdfDoc.numPages}`;
+ update(ref(db,'activeViewers/'+uid),{page:pageNum});
+ set(ref(db,'pageViews/'+pageNum),{views:increment(1)});
+}
+document.getElementById('prev').onclick=()=>{if(pageNum>1){pageNum--;render();}};
+document.getElementById('next').onclick=()=>{if(pageNum<pdfDoc.numPages){pageNum++;render();}};
+document.getElementById('zoomIn').onclick=()=>{scale+=0.2;render();};
+document.getElementById('zoomOut').onclick=()=>{scale=Math.max(0.8,scale-0.2);render();};
+document.getElementById('downloadPage').onclick=()=>{
+ const a=document.createElement('a');
+ a.href=canvas.toDataURL('image/png');
+ a.download=`dajjali_page_${pageNum}.png`;
+ a.click();
+ update(ref(db,'stats/downloads'),{count:increment(1)});
+};
+
+// chapters dummy
+const chapters=[
+ {t:'Introduction',p:1},{t:'The Matrix Revealed',p:10},{t:'Global Control',p:30},{t:'Protection Guide',p:60}
+];
+const ul=document.getElementById('chapters');
+chapters.forEach(ch=>{const li=document.createElement('li');li.textContent=`${ch.t} - Page ${ch.p}`;li.style.padding='10px';li.style.cursor='pointer';li.onclick=()=>{pageNum=ch.p;switchTab('read');render();};ul.appendChild(li);});
+
+// translate
+document.getElementById('doTranslate').onclick=async ()=>{
+ const lang=document.getElementById('tlang').value;
+ const imgData=canvas.toDataURL('image/png');
+ const res=await fetch('/api/translate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:imgData,lang})});
+ const blob=await res.blob();
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement('a');a.href=url;a.download=`translated_page_${pageNum}_${lang}.png`;a.click();
+ update(ref(db,'stats/translations'),{count:increment(1)});
+};
+
+if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js');}
+</script>
+</body>
+</html>

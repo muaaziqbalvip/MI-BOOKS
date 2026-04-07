@@ -1,0 +1,25 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Admin - Dajjali Matrix</title><style>body{background:#0b1120;color:#e0e8ff;font-family:system-ui;padding:20px}input,button{padding:10px;margin:5px;border-radius:6px;border:none}button{background:#ff2d2d;color:white;cursor:pointer} .card{background:#121a33;padding:16px;border-radius:12px;margin:12px 0}</style></head><body>
+<div id="login"><h2>Admin Login</h2><input id="pwd" type="password" placeholder="Password"><button onclick="login()">Login</button></div>
+<div id="panel" style="display:none"><h2>Live Dashboard - DAJJALI MATRIX</h2>
+<div class="card"><b>Active Viewers:</b> <span id="active">0</span></div>
+<div class="card"><b>Total Views:</b> <span id="views">0</span></div>
+<div class="card"><b>Downloads:</b> <span id="downs">0</span></div>
+<div class="card"><b>Top Pages:</b><div id="pages"></div></div>
+<div class="card"><b>Ratings & Feedback:</b><div id="feedback"></div></div>
+</div>
+<script type="module">
+import {firebaseConfig} from '/firebase-config.js';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import {getDatabase,ref,onValue} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+function login(){if(document.getElementById('pwd').value==='123456'){document.getElementById('login').style.display='none';document.getElementById('panel').style.display='block';init();}else alert('Wrong password');}
+window.login=login;
+function init(){
+ const app=initializeApp(firebaseConfig);
+ const db=getDatabase(app);
+ onValue(ref(db,'activeViewers'),s=>{document.getElementById('active').textContent=Object.keys(s.val()||{}).length});
+ onValue(ref(db,'stats/totalViews'),s=>{document.getElementById('views').textContent=s.val()?.views||0});
+ onValue(ref(db,'stats/downloads'),s=>{document.getElementById('downs').textContent=s.val()?.count||0});
+ onValue(ref(db,'pageViews'),s=>{const v=s.val()||{};const sorted=Object.entries(v).sort((a,b)=>(b[1].views||0)-(a[1].views||0)).slice(0,10);document.getElementById('pages').innerHTML=sorted.map(([p,d])=>`Page ${p}: ${d.views} views`).join('<br>')});
+ onValue(ref(db,'feedback'),s=>{const v=s.val()||{};document.getElementById('feedback').innerHTML=Object.values(v).map(f=>`<div>⭐${f.rating} - ${f.comment||''}</div>`).join('')});
+}
+</script></body></html>
